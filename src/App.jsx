@@ -7,6 +7,34 @@ import {
 } from "lucide-react";
 import "./App.css";
 
+const API_URL = "http://localhost:5000";
+
+async function saveBooking(guestName, room, amount) {
+  const today = new Date();
+  const checkIn = today.toISOString().slice(0, 10);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const checkOut = tomorrow.toISOString().slice(0, 10);
+
+  const response = await fetch(`${API_URL}/api/bookings`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      guestName,
+      room,
+      checkIn,
+      checkOut,
+      amount
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error("Could not save booking");
+  }
+
+  return response.json();
+}
+
 const initialRooms = [
   { id: "101", type: "Deluxe Room", price: 2500, status: "Available" },
   { id: "102", type: "Standard Room", price: 1800, status: "Occupied" },
@@ -53,32 +81,53 @@ export default function App() {
       .toLowerCase().includes(search.toLowerCase())
   );
 
-  function addBooking(e) {
+  
+  async function addBooking(e) {
     e.preventDefault();
+
     if (!guest.trim()) return;
+
     const selectedRoom = rooms.find((r) => r.id === room);
+
     if (!selectedRoom || selectedRoom.status !== "Available") {
       notify("Please choose an available room.");
       return;
     }
-    setBookings((old) => [
-      {
-        id: "BK" + String(Date.now()).slice(-5),
-        guest: guest.trim(),
+
+    try {
+      const saved = await saveBooking(
+        guest.trim(),
         room,
-        date: "29 Oct 2026",
-        amount: selectedRoom.price,
-        status: "Confirmed",
-      },
-      ...old,
-    ]);
-    setRooms((old) =>
-      old.map((r) => r.id === room ? { ...r, status: "Occupied" } : r)
-    );
-    setGuest("");
-    setShowForm(false);
-    notify("Booking created successfully!");
+        selectedRoom.price
+      );
+
+      setBookings((old) => [
+        {
+          id: saved._id,
+          guest: saved.guestName,
+          room: saved.room,
+          date: saved.checkIn,
+          amount: selectedRoom.price,
+          status: saved.status
+        },
+        ...old
+      ]);
+
+      setRooms((old) =>
+        old.map((r) =>
+          r.id === room ? { ...r, status: "Occupied" } : r
+        )
+      );
+
+      setGuest("");
+      setShowForm(false);
+      notify("Booking saved to MongoDB!");
+    } catch (error) {
+      console.error(error);
+      notify("Booking failed. Check that your backend is running.");
+    }
   }
+
 
   function toggleRoom(id) {
     setRooms((old) => old.map((r) =>
